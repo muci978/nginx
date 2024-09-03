@@ -101,6 +101,10 @@ static void ngx_start_worker_processes(int threadnums)
     for (i = 0; i < threadnums; i++)
     {
         ngx_spawn_process(i, "worker process");
+        if (ngx_process == NGX_PROCESS_WORKER)
+        {
+            exit(0);
+        }
     }
     return;
 }
@@ -122,6 +126,7 @@ static int ngx_spawn_process(int inum, const char *pprocname)
     case 0:
         ngx_parent = ngx_pid;
         ngx_pid = getpid();
+        sleep(1);
         ngx_worker_process_cycle(inum, pprocname); // 所有worker子进程在这个函数里不断循环
         break;
 
@@ -141,10 +146,14 @@ static void ngx_worker_process_cycle(int inum, const char *pprocname)
     // 重新为子进程设置进程名
     ngx_worker_process_init(inum);
     ngx_setproctitle(pprocname); // 设置标题
-    ngx_log_error_core(NGX_LOG_NOTICE, 0, "%s %P 【worker进程】启动并开始运行......!", pprocname, ngx_pid);
+    ngx_log_error_core(NGX_LOG_NOTICE, 0, "%s %P 【worker进程】启动并开始运行, 父进程是 %P", pprocname, ngx_pid, ngx_parent);
     for (;;)
     {
         ngx_process_events_and_timers(); // 处理网络事件和定时器事件
+        if (g_stopEvent == 1)
+        {
+            break;
+        }
     }
     // 如果从这个循环跳出来
     g_threadpool.StopAll();      // 考虑在这里停止线程池；

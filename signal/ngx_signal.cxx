@@ -112,7 +112,8 @@ static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 		switch (signo)
 		{
 		case SIGTERM:
-			exit(0);
+			// exit(0);
+			g_stopEvent = 1;
 			break;
 
 		default:
@@ -201,5 +202,6 @@ static void ngx_shutdown(void)
 	{
 		ngx_log_error_core(NGX_LOG_NOTICE, 0, "【master进程】等待 %d 个worker进程的退出......", ngx_working_subprocess);
 		ngx_process_get_status();
+		sleep(1);
 	}
 }
