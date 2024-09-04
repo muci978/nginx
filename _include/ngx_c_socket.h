@@ -55,8 +55,8 @@ struct ngx_connection_s
 	// 和收包有关
 	unsigned char curStat;			   // 当前收包的状态
 	char dataHeadInfo[_DATA_BUFSIZE_]; // 用于保存收到的数据的包头信息
-	char *precvbuf;					   // 接收数据的缓冲区的头指针，对收到不全的包非常有用，看具体应用的代码
-	unsigned int irecvlen;			   // 要收到多少数据，由这个变量指定，和precvbuf配套使用，看具体应用的代码
+	char *precvbuf;					   // 接收数据的缓冲区的头指针，对收到不全的包非常有用
+	unsigned int irecvlen;			   // 要收到多少数据，由这个变量指定，和precvbuf配套使用
 	char *precvMemPointer;			   // new出来的用于收包的内存首地址，释放用的
 
 	pthread_mutex_t logicPorcMutex; // 逻辑处理相关的互斥量
@@ -77,8 +77,6 @@ struct ngx_connection_s
 	uint64_t FloodkickLastTime;	 // Flood攻击上次收到包的时间
 	int FloodAttackCount;		 // Flood攻击在该时间内收到包的次数统计
 	std::atomic<int> iSendCount; // 发送队列中有的数据条目数，若client只发不收，则可能造成此数过大，依据此数做出踢出处理
-
-	lpngx_connection_t next; // 这是个指针，指向下一个本类型对象，用于把空闲的连接池对象串起来构成一个单向链表，方便取用
 };
 
 // 消息头，引入的目的是当收到数据包时，额外记录一些内容以备将来使用

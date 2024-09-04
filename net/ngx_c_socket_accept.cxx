@@ -34,7 +34,7 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         if (use_accept4)
         {
             // listen套接字是非阻塞的，所以即便已完成连接队列为空，accept4()也不会卡在这里
-            s = accept4(oldc->fd, &mysockaddr, &socklen, SOCK_NONBLOCK); // 从内核获取一个用户端连接，最后一个参数SOCK_NONBLOCK表示返回一个非阻塞的socket，节省一次ioctl
+            s = accept4(oldc->fd, &mysockaddr, &socklen, SOCK_NONBLOCK); // 从内核获取一个用户端连接，最后一个参数SOCK_NONBLOCK表示返回一个非阻塞的socket，节省一次fcntl
         }
         else
         {
@@ -98,10 +98,10 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
             }
         }
 
-        newc = ngx_get_connection(s); // 这是针对新连入用户的连接，和监听套接字所对应的连接是两个不同的东西
+        newc = ngx_get_connection(s); // 这是分配给新的客户连接的连接
         if (newc == NULL)
         {
-            // 连接池中连接不够用，那么就得把这个socekt直接关闭并返回了，因为在ngx_get_connection()中已经写日志了，所以这里不需要写日志了
+            // 连接池中连接不够用，那么就把这个socekt直接关闭并返回，因为在ngx_get_connection()中已经写日志了，所以这里不需要写日志了
             if (close(s) == -1)
             {
                 ngx_log_error_core(NGX_LOG_ALERT, errno, "CSocket::ngx_event_accept()中close(%d)失败!", s);
@@ -127,7 +127,7 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         newc->rhandler = &CSocket::ngx_read_request_handler;  // 设置数据来时的读处理函数
         newc->whandler = &CSocket::ngx_write_request_handler; // 设置数据发送时的写处理函数
 
-        // 客户端应该主动发送第一次的数据，这里将读事件加入epoll监控，这样当客户端发送数据来时，会触发ngx_wait_request_handler()被ngx_epoll_process_events()调用
+        // 客户端应该主动发送第一次的数据，将读事件加入epoll监控
         if (ngx_epoll_oper_event(
                 s,                    
                 EPOLL_CTL_ADD,        
