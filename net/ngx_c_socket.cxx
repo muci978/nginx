@@ -46,7 +46,7 @@ CSocket::CSocket()
     return;
 }
 
-// 初始化函数【fork()子进程之前干这个事】
+// 初始化函数
 // 成功返回true，失败返回false
 bool CSocket::Initialize()
 {
@@ -139,10 +139,10 @@ CSocket::~CSocket()
     return;
 }
 
-// 关闭退出函数[子进程中执行]
+// 关闭退出函数
 void CSocket::Shutdown_subproc()
 {
-    // 把干活的线程停止掉，注意系统应该尝试通过设置g_stopEvent = 1来让整个项目停止
+    // 把干活的线程停止掉
     if (sem_post(&m_semEventSendQueue) == -1) // 让ServerSendQueueThread()流程走下来干活
     {
         ngx_log_stderr(0, "CSocket::Shutdown_subproc()中sem_post(&m_semEventSendQueue)失败.");
@@ -153,7 +153,7 @@ void CSocket::Shutdown_subproc()
     {
         pthread_join((*iter)->_Handle, NULL);
     }
-    // 释放一下new出来的ThreadItem【线程池中的线程】
+    // 释放new出来的ThreadItem
     for (iter = m_threadVector.begin(); iter != m_threadVector.end(); iter++)
     {
         if (*iter)
@@ -224,7 +224,7 @@ bool CSocket::ngx_open_listening_sockets()
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     CConfig *p_config = CConfig::GetInstance();
-    for (int i = 0; i < m_ListenPortCount; i++) // 要监听这么多个端口
+    for (int i = 0; i < m_ListenPortCount; i++) // 监听端口数量
     {
 
         isock = socket(AF_INET, SOCK_STREAM, 0);
@@ -296,8 +296,8 @@ bool CSocket::ngx_open_listening_sockets()
 // 设置socket连接为非阻塞模式
 bool CSocket::setnonblocking(int sockfd)
 {
-    int nb = 1;
-    if (ioctl(sockfd, FIONBIO, &nb) == -1)
+    int old = fcntl(sockfd, F_GETFL);
+    if ((fcntl(sockfd, F_SETFL, old | O_NONBLOCK)) == -1)
     {
         return false;
     }
@@ -332,7 +332,7 @@ void CSocket::msgSend(char *psendbuf)
         return;
     }
 
-    // 总体数据并无风险，不会导致服务器崩溃，要看看个体数据，找一下恶意者了
+    // 总体数据并无风险，不会导致服务器崩溃，要看看个体数据，找一下恶意者
     LPSTRUC_MSG_HEADER pMsgHeader = (LPSTRUC_MSG_HEADER)psendbuf;
     lpngx_connection_t p_Conn = pMsgHeader->pConn;
     if (p_Conn->iSendCount > 400)
@@ -426,7 +426,7 @@ void CSocket::printTDInfo()
         ngx_log_stderr(0, "当前收消息队列/发消息队列大小分别为(%d/%d)，丢弃的待发送数据包数量为%d。", tmprmqc, tmpsmqc, m_iDiscardSendPkgCount);
         if (tmprmqc > 100000)
         {
-            // 接收队列过大，报一下，这个属于应该引起警觉，考虑限速等等手段
+            // 接收队列过大，报一下，这个应该引起警觉，考虑限速等等手段
             ngx_log_stderr(0, "接收队列条目数量过大(%d)，要考虑限速或者增加处理线程数量了！！！！！！", tmprmqc);
         }
         ngx_log_stderr(0, "-------------------------------------end---------------------------------------");
@@ -434,20 +434,20 @@ void CSocket::printTDInfo()
     return;
 }
 
-// epoll功能初始化，子进程中进行 ，本函数被ngx_worker_process_init()所调用
+// epoll功能初始化，子进程中进行，本函数被ngx_worker_process_init()所调用
 int CSocket::ngx_epoll_init()
 {
-    m_epollhandle = epoll_create(m_worker_connections); // 直接以epoll连接的最大项数为参数，肯定是>0的；
+    m_epollhandle = epoll_create(m_worker_connections); // 直接以epoll连接的最大项数为参数
     if (m_epollhandle == -1)
     {
         ngx_log_stderr(errno, "CSocket::ngx_epoll_init()中epoll_create()失败.");
         exit(2);
     }
 
-    // 创建连接池【数组】，这个东西后续用于处理所有客户端的连接
+    // 创建连接池
     initconnection();
 
-    // 遍历所有监听socket【监听端口】，为每个监听socket增加一个连接池中的连接【就是让一个socket和一个内存绑定，以方便记录该sokcet相关的数据、状态等等】
+    // 遍历所有监听socket，为每个监听socket增加一个连接池中的连接
     std::vector<lpngx_listening_t>::iterator pos;
     for (pos = m_ListenSocketList.begin(); pos != m_ListenSocketList.end(); ++pos)
     {
@@ -463,15 +463,14 @@ int CSocket::ngx_epoll_init()
         // 对监听端口的读事件设置处理方法，因为监听端口是用来等对方连接的发送握手的，所以监听端口关心的就是读事件
         p_Conn->rhandler = &CSocket::ngx_event_accept;
 
-        // 往监听socket上增加监听事件，从而开始让监听端口履行其职责【如果不加这行，虽然端口能连上，但不会触发ngx_epoll_process_events()里边的epoll_wait()往下走】
+        // 往监听socket上增加监听事件
 
         if (ngx_epoll_oper_event(
-                (*pos)->fd,           // socekt句柄
-                EPOLL_CTL_ADD,        // 事件类型，这里是增加
-                EPOLLIN | EPOLLRDHUP, // 标志，这里代表要增加的标志,EPOLLIN：可读，EPOLLRDHUP：TCP连接的远端关闭或者半关闭
-                0,                    // 对于事件类型为增加的，不需要这个参数
-                p_Conn                // 连接池中的连接
-                ) == -1)
+                (*pos)->fd,
+                EPOLL_CTL_ADD,
+                EPOLLIN | EPOLLRDHUP,
+                0,
+                p_Conn) == -1)
         {
             exit(2);
         }
@@ -482,11 +481,11 @@ int CSocket::ngx_epoll_init()
 // 对epoll事件的具体操作
 // 返回值：成功返回1，失败返回-1；
 int CSocket::ngx_epoll_oper_event(
-    int fd,                  // 句柄，一个socket
-    uint32_t eventtype,      // 事件类型，一般是EPOLL_CTL_ADD，EPOLL_CTL_MOD，EPOLL_CTL_DEL ，就是操作epoll红黑树的节点(增加，修改，删除)
+    int fd,                  // socket
+    uint32_t eventtype,      // 事件类型
     uint32_t flag,           // 标志，具体含义取决于eventtype
-    int bcaction,            // 补充动作，用于补充flag标记的不足  :  0：增加   1：去掉 2：完全覆盖 ,eventtype是EPOLL_CTL_MOD时这个参数就有用
-    lpngx_connection_t pConn // pConn：一个指针【其实是一个连接】，EPOLL_CTL_ADD时增加到红黑树中去，将来epoll_wait时能取出来用
+    int bcaction,            // 补充动作，用于补充flag标记的不足  :  0：增加   1：去掉 2：完全覆盖 eventtype是EPOLL_CTL_MOD时这个参数有用
+    lpngx_connection_t pConn // pConn：一个连接的指针
 )
 {
     struct epoll_event ev;
@@ -494,8 +493,8 @@ int CSocket::ngx_epoll_oper_event(
 
     if (eventtype == EPOLL_CTL_ADD)
     {
-        ev.events = flag;     // 既然是增加节点，则不管原来是什么标记
-        pConn->events = flag; // 这个连接本身也记录这个标记
+        ev.events = flag;
+        pConn->events = flag;
     }
     else if (eventtype == EPOLL_CTL_MOD)
     {
@@ -522,7 +521,7 @@ int CSocket::ngx_epoll_oper_event(
         return 1;
     }
 
-    // 原来的理解中，绑定ptr只在EPOLL_CTL_ADD的时候做一次即可，但是发现EPOLL_CTL_MOD似乎会破坏掉.data.ptr，因此不管是EPOLL_CTL_ADD，还是EPOLL_CTL_MOD，都给进去
+    // EPOLL_CTL_MOD似乎会破坏掉.data.ptr，因此不管是EPOLL_CTL_ADD，还是EPOLL_CTL_MOD，都重新设置
     ev.data.ptr = (void *)pConn;
 
     if (epoll_ctl(m_epollhandle, eventtype, fd, &ev) == -1)
@@ -534,8 +533,8 @@ int CSocket::ngx_epoll_oper_event(
 }
 
 // 开始获取发生的事件消息
-// 参数unsigned int timer：epoll_wait()阻塞的时长，单位是毫秒
-// 返回值，1：正常返回 ,0：有问题返回，一般不管是正常还是问题返回，都应该保持进程继续运行
+// 参数int timer：epoll_wait()阻塞的时长，单位是毫秒
+// 返回值，1：正常返回 ,0：有问题返回，不管是正常还是问题返回，都应该保持进程继续运行
 // 本函数被ngx_process_events_and_timers()调用，而ngx_process_events_and_timers()是在子进程的死循环中被反复调用
 int CSocket::ngx_epoll_process_events(int timer)
 {
@@ -587,7 +586,7 @@ int CSocket::ngx_epoll_process_events(int timer)
         if (revents & EPOLLIN)
         {
 
-            (this->*(p_Conn->rhandler))(p_Conn); // 注意括号的运用来正确设置优先级，这是一个成员函数指针
+            (this->*(p_Conn->rhandler))(p_Conn); // 这是一个成员函数指针
         }
 
         if (revents & EPOLLOUT) // 对方关闭连接也触发这个
@@ -655,8 +654,7 @@ void *CSocket::ServerSendQueueThread(void *threadData)
 
                 if (p_Conn->iCurrsequence != pMsgHeader->iCurrsequence)
                 {
-                    // 本包中保存的序列号与p_Conn【连接池中连接】中实际的序列号已经不同，丢弃此消息，小心处理该消息的删除
-                    pos2 = pos;
+                    // 本包中保存的序列号与p_Conn中实际的序列号已经不同，丢弃此消息
                     pos++;
                     pSocketObj->m_MsgSendQueue.erase(pos2);
                     --pSocketObj->m_iSendMsgQueueCount;
@@ -680,8 +678,8 @@ void *CSocket::ServerSendQueueThread(void *threadData)
                 pSocketObj->m_MsgSendQueue.erase(pos2);
                 --pSocketObj->m_iSendMsgQueueCount;
                 p_Conn->psendbuf = (char *)pPkgHeader; // 要发送的数据的缓冲区指针，因为发送数据不一定全部都能发送出去，要记录数据发送到了哪里，需要知道下次数据从哪里开始发送
-                itmp = ntohs(pPkgHeader->pkgLen);      // 包头+包体 长度 ，打包时用了htons
-                p_Conn->isendlen = itmp;               // 要发送多少数据，因为发送数据不一定全部都能发送出去，我们需要知道剩余有多少数据还没发送
+                itmp = ntohs(pPkgHeader->pkgLen);      // 包头+包体长度 ，打包时用了htons
+                p_Conn->isendlen = itmp;               // 要发送多少数据，因为发送数据不一定全部都能发送出去，需要知道剩余有多少数据还没发送
 
                 sendsize = pSocketObj->sendproc(p_Conn, p_Conn->psendbuf, p_Conn->isendlen);
                 if (sendsize > 0)
@@ -691,14 +689,14 @@ void *CSocket::ServerSendQueueThread(void *threadData)
                         // 成功发送的和要求发送的数据相等，说明数据全部发完
                         p_memory->FreeMemory(p_Conn->psendMemPointer);
                         p_Conn->psendMemPointer = NULL;
-                        p_Conn->iThrowsendCount = 0; // 这行其实可以没有，因此此时此刻这东西就是=0的
+                        p_Conn->iThrowsendCount = 0;
                     }
-                    else // 没有全部发送完毕(EAGAIN)，数据只发出去了一部分，但肯定是因为发送缓冲区满了
+                    else // 没有全部发送完毕(EAGAIN)，数据只发出去了一部分，肯定是因为发送缓冲区满了
                     {
                         // 发送到了哪里，剩余多少，记录下来，方便下次sendproc()时使用
                         p_Conn->psendbuf = p_Conn->psendbuf + sendsize;
                         p_Conn->isendlen = p_Conn->isendlen - sendsize;
-                        // 因为发送缓冲区慢了，所以现在要依赖系统通知来发送数据了
+                        // 因为发送缓冲区满了，所以现在要依赖系统通知来发送数据
                         ++p_Conn->iThrowsendCount; // 标记发送缓冲区满了，需要通过epoll事件来驱动消息的继续发送，原子+1，且不可写成p_Conn->iThrowsendCount = p_Conn->iThrowsendCount +1 ，这种写法不是原子+1
                         // 投递此事件后，依靠epoll调用ngx_write_request_handler()函数发送数据
                         if (pSocketObj->ngx_epoll_oper_event(
@@ -711,7 +709,7 @@ void *CSocket::ServerSendQueueThread(void *threadData)
                             ngx_log_stderr(errno, "CSocket::ServerSendQueueThread()ngx_epoll_oper_event()失败.");
                         }
                     }
-                    continue; // 继续处理其他消息
+                    continue;
                 }
 
                 // 能走到这里应该有问题
@@ -720,14 +718,13 @@ void *CSocket::ServerSendQueueThread(void *threadData)
 
                     p_memory->FreeMemory(p_Conn->psendMemPointer); // 释放内存
                     p_Conn->psendMemPointer = NULL;
-                    p_Conn->iThrowsendCount = 0; // 这行其实可以没有，因此此时此刻这东西就是=0的
                     continue;
                 }
 
                 // 继续处理问题
                 else if (sendsize == -1)
                 {
-                    // 发送缓冲区已经满了【一个字节都没发出去，说明发送 缓冲区当前正好是满的】
+                    // 一个字节都没发出去，说明发送缓冲区当前正好是满的
                     ++p_Conn->iThrowsendCount; // 标记发送缓冲区满了，需要通过epoll事件来驱动消息的继续发送
                     // 投递此事件后，依靠epoll调用ngx_write_request_handler()函数发送数据
                     if (pSocketObj->ngx_epoll_oper_event(
@@ -744,10 +741,9 @@ void *CSocket::ServerSendQueueThread(void *threadData)
 
                 else
                 {
-                    // 能走到这里的，应该就是返回值-2了，一般认为对端断开了，等待recv()来做断开socket以及回收资源
+                    // 能走到这里的，返回-2，一般认为对端断开了，等待recv()来做断开socket以及回收资源
                     p_memory->FreeMemory(p_Conn->psendMemPointer);
                     p_Conn->psendMemPointer = NULL;
-                    p_Conn->iThrowsendCount = 0; // 这行其实可以没有，因此此时此刻这东西就是=0的
                     continue;
                 }
             }

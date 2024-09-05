@@ -137,8 +137,8 @@ static int ngx_spawn_process(int inum, const char *pprocname)
     return pid;
 }
 
-// 描述：worker子进程的功能函数，每个woker子进程就在这里无限循环【处理网络事件和定时器事件以对外提供web服务】
-// inum：进程编号【0开始】
+// 描述：worker子进程的功能函数，每个woker子进程就在这里无限循环（处理网络事件和定时器事件以对外提供web服务）
+// inum：进程编号，0开始
 static void ngx_worker_process_cycle(int inum, const char *pprocname)
 {
     ngx_process = NGX_PROCESS_WORKER; // 设置进程的类型，是worker进程
@@ -167,13 +167,13 @@ static void ngx_worker_process_init(int inum)
     sigset_t set; // 信号集
 
     sigemptyset(&set);                              // 清空信号集
-    if (sigprocmask(SIG_SETMASK, &set, NULL) == -1) // 原来是屏蔽那10个信号【防止fork()期间收到信号导致混乱】，现在不再屏蔽任何信号【接收任何信号】
+    if (sigprocmask(SIG_SETMASK, &set, NULL) == -1) // 原来是屏蔽那10个信号】，现在不再屏蔽任何信号
     {
         ngx_log_error_core(NGX_LOG_ALERT, errno, "ngx_worker_process_init()中sigprocmask()失败!");
     }
 
     // 线程池代码，率先创建，至少要比和socket相关的内容优先
-    // 线程池里的代码是用于处理业务？
+    // 线程池里的代码是用于处理业务
     CConfig *p_config = CConfig::GetInstance();
     int tmpthreadnums = p_config->GetIntDefault("ProcMsgRecvWorkThreadCount", 5); // 处理接收到的消息的线程池中线程数量
     if (g_threadpool.Create(tmpthreadnums) == false)                              // 创建线程池中线程
