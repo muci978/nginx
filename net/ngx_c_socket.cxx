@@ -366,7 +366,7 @@ void CSocket::zdClosesocketProc(lpngx_connection_t p_Conn)
     }
     if (p_Conn->fd != -1)
     {
-        close(p_Conn->fd); // 这个socket关闭，关闭后epoll就会被从红黑树中删除，所以这之后无法收到任何epoll事件
+        close(p_Conn->fd); // 调用close函数后，内核会自动将fd从epoll中删除
         p_Conn->fd = -1;
     }
 

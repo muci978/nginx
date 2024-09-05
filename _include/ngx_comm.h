@@ -22,7 +22,7 @@
 // 包头结构
 typedef struct _COMM_PKG_HEADER
 {
-	unsigned short pkgLen; // 报文总长度【包头+包体】--2字节，2字节可以表示的最大数字为6万多，我们定义_PKG_MAX_LENGTH 30000，所以用pkgLen足够保存下
+	unsigned short pkgLen; // 报文总长度【包头+包体】--2字节，2字节可以表示的最大数字为65535，我们定义_PKG_MAX_LENGTH 30000，所以用pkgLen足够保存下
 						   // 包头中记录着整个包【包头+包体】的长度
 
 	unsigned short msgCode; // 消息类型代码--2字节，用于区别每个不同的命令【不同的消息】

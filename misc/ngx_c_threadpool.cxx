@@ -54,7 +54,7 @@ bool CThreadPool::Create(int threadNum)
 
     for (int i = 0; i < m_iThreadNum; ++i)
     {
-        m_threadVector.push_back(pNew = new ThreadItem(this));        // 创建 一个新线程对象 并入到容器中
+        m_threadVector.push_back(pNew = new ThreadItem(this));        // 创建一个新线程对象并入到容器中
         err = pthread_create(&pNew->_Handle, NULL, ThreadFunc, pNew); 
         if (err != 0)
         {
@@ -96,7 +96,6 @@ void *CThreadPool::ThreadFunc(void *threadData)
 
         while ((pThreadPoolObj->m_MsgRecvQueue.size() == 0) && m_shutdown == false)
         {
-
             if (pThread->ifrunning == false)
                 pThread->ifrunning = true;                      // 标记为true了才允许调用StopAll()：测试中发现如果Create()和StopAll()紧挨着调用，就会导致线程混乱，所以每个线程必须执行到这里，才认为是启动成功了
             //pthread_cond_wait()函数一进入wait状态就会自动release mutex。当其他线程通过pthread_cond_signal()或pthread_cond_broadcast，把该线程唤醒，使pthread_cond_wait()通过（返回）时，该线程又自动获得该mutex

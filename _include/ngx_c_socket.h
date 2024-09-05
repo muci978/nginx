@@ -45,35 +45,29 @@ struct ngx_connection_s
 	uint64_t iCurrsequence;		// 序号，每次分配出去时+1，此法也有可能在一定程度上检测错包废包
 	struct sockaddr s_sockaddr; // 保存对方地址信息
 
-	// 和读有关的标志
 	ngx_event_handler_pt rhandler; // 读事件的相关处理方法
 	ngx_event_handler_pt whandler; // 写事件的相关处理方法
 
 	// 和epoll事件有关
 	uint32_t events;
 
-	// 和收包有关
 	unsigned char curStat;			   // 当前收包的状态
 	char dataHeadInfo[_DATA_BUFSIZE_]; // 用于保存收到的数据的包头信息
-	char *precvbuf;					   // 接收数据的缓冲区的头指针，对收到不全的包非常有用
-	unsigned int irecvlen;			   // 要收到多少数据，由这个变量指定，和precvbuf配套使用
+	char *precvbuf;					   // 接收数据的缓冲区的头指针，收到数据后放到这
+	unsigned int irecvlen;			   // 还要收到多少数据，和precvbuf配套使用
 	char *precvMemPointer;			   // new出来的用于收包的内存首地址，释放用的
 
 	pthread_mutex_t logicPorcMutex; // 逻辑处理相关的互斥量
 
-	// 和发包有关
 	std::atomic<int> iThrowsendCount; // 发送消息，如果发送缓冲区满了，则需要通过epoll事件来驱动消息的继续发送，所以如果发送缓冲区满，则用这个变量标记
 	char *psendMemPointer;			  // 发送完成后释放用的，整个数据的头指针，其实是 消息头 + 包头 + 包体
-	char *psendbuf;					  // 发送数据的缓冲区的头指针，开始 其实是包头+包体
-	unsigned int isendlen;			  // 要发送多少数据
+	char *psendbuf;					  // 发送数据的缓冲区的头指针，最开始指向包头+包体，发送它指向的数据
+	unsigned int isendlen;			  // 还要发送多少数据
 
-	// 和回收有关
 	time_t inRecyTime; // 入到资源回收站里去的时间
 
-	// 和心跳包有关
 	time_t lastPingTime; // 上次ping的时间【上次发送心跳包的事件】
 
-	// 和网络安全有关
 	uint64_t FloodkickLastTime;	 // Flood攻击上次收到包的时间
 	int FloodAttackCount;		 // Flood攻击在该时间内收到包的次数统计
 	std::atomic<int> iSendCount; // 发送队列中有的数据条目数，若client只发不收，则可能造成此数过大，依据此数做出踢出处理
@@ -82,7 +76,7 @@ struct ngx_connection_s
 // 消息头，引入的目的是当收到数据包时，额外记录一些内容以备将来使用
 typedef struct _STRUC_MSG_HEADER
 {
-	lpngx_connection_t pConn; // 记录对应的链接，注意这是个指针
+	lpngx_connection_t pConn; // 记录对应的连接，注意这是个指针
 	uint64_t iCurrsequence;	  // 收到数据包时记录对应连接的序号，将来能用于比较是否连接已经作废用
 } STRUC_MSG_HEADER, *LPSTRUC_MSG_HEADER;
 

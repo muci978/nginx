@@ -217,12 +217,12 @@ void ngx_connection_s::PutOneToFree()
                     }
                     if (p_Conn->iThrowsendCount > 0)
                     {
-                        ngx_log_stderr(0, "CSocket::ServerRecyConnectionThread()中到释放时间却发现p_Conn.iThrowsendCount!=0，这个不该发生");
+                        ngx_log_stderr(0, "CSocket::ServerRecyConnectionThread()中到释放时间却发现p_Conn.iThrowsendCount!=0");
                     }
 
                     // 开始释放
                     --pSocketObj->m_totol_recyconnection_n;      // 待释放连接队列大小-1
-                    pSocketObj->m_recyconnectionList.erase(pos); // 迭代器已经失效，但pos所指内容在p_Conn里保存着
+                    pSocketObj->m_recyconnectionList.erase(pos);
 
                     pSocketObj->ngx_free_connection(p_Conn); // 归还参数pConn所代表的连接到到连接池中
                     goto lblRRTD;
@@ -247,9 +247,9 @@ void ngx_connection_s::PutOneToFree()
                     for (; pos != posend; ++pos)
                     {
                         p_Conn = (*pos);
-                        --pSocketObj->m_totol_recyconnection_n;      // 待释放连接队列大小-1
-                        pSocketObj->m_recyconnectionList.erase(pos); // 迭代器已经失效，但pos所指内容在p_Conn里保存着
-                        pSocketObj->ngx_free_connection(p_Conn);     // 归还参数pConn所代表的连接到到连接池中
+                        --pSocketObj->m_totol_recyconnection_n;      
+                        pSocketObj->m_recyconnectionList.erase(pos); 
+                        pSocketObj->ngx_free_connection(p_Conn);     
                         goto lblRRTD2;
                     }
                     err = pthread_mutex_unlock(&pSocketObj->m_recyconnqueueMutex);

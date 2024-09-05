@@ -31,12 +31,12 @@ void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
         return; // 该处理的上边这个recvproc()函数处理过了，<=0直接return
     }
 
-    // 成功收到了一些字节（>0），开始判断收到了多少数据
+    // 成功收到了一些字节，开始判断收到了多少数据
     if (pConn->curStat == _PKG_HD_INIT) // 连接建立起来时肯定是这个状态，因为在ngx_get_connection()中已经把curStat成员赋值成_PKG_HD_INIT了
     {
-        if (reco == m_iLenPkgHeader) // 正好收到完整包头，这里拆解包头
+        if (reco == m_iLenPkgHeader) // 正好收到完整包头，拆解包头
         {
-            ngx_wait_request_handler_proc_p1(pConn, isflood); // 调用专门针对包头处理完整的函数去处理
+            ngx_wait_request_handler_proc_p1(pConn, isflood);
         }
         else
         {
@@ -126,12 +126,11 @@ ssize_t CSocket::recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
-            ngx_log_stderr(errno, "CSocket::recvproc()中errno == EAGAIN || errno == EWOULDBLOCK成立，出乎我意料！"); // epoll为LT模式不应该出现这个返回值，所以直接打印出来瞧瞧
-            return -1;
+            ngx_log_stderr(errno, "CSocket::recvproc()中errno == EAGAIN || errno == EWOULDBLOCK成立！"); // epoll为LT模式不应该出现这个返回值
         }
         if (errno == EINTR)
         {
-            ngx_log_stderr(errno, "CSocket::recvproc()中errno == EINTR成立，出乎我意料！");
+            ngx_log_stderr(errno, "CSocket::recvproc()中errno == EINTR成立！");
             return -1;
         }
 
@@ -141,11 +140,11 @@ ssize_t CSocket::recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen)
         return -1;
     }
 
-    // 能走到这里的，就认为收到了有效数据
+    // 收到了有效数据
     return n; // 返回收到的字节数
 }
 
-// 包头收完整后的处理，称为包处理阶段1【p1】：写成函数，方便复用
+// 包头收完整后的处理，称为包处理阶段1
 // 注意参数isflood是个引用
 void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &isflood)
 {
@@ -155,15 +154,10 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &i
     pPkgHeader = (LPCOMM_PKG_HEADER)pConn->dataHeadInfo; // 正好收到包头时，包头信息肯定是在dataHeadInfo里
 
     unsigned short e_pkgLen;
+    // 所有传输到网络上的二字节数据都要转化为网络字节序，收到之后也要转化回来
     e_pkgLen = ntohs(pPkgHeader->pkgLen);
     // 恶意包或者错误包的判断
-    if (e_pkgLen < m_iLenPkgHeader)
-    {
-        pConn->curStat = _PKG_HD_INIT;
-        pConn->precvbuf = pConn->dataHeadInfo;
-        pConn->irecvlen = m_iLenPkgHeader;
-    }
-    else if (e_pkgLen > (_PKG_MAX_LENGTH - 1000)) // 客户端发来包居然说包长度 > 29000，肯定是恶意包
+    if (e_pkgLen < m_iLenPkgHeader || e_pkgLen > (_PKG_MAX_LENGTH - 1000))
     {
         pConn->curStat = _PKG_HD_INIT;
         pConn->precvbuf = pConn->dataHeadInfo;
@@ -172,20 +166,20 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &i
     else
     {
         // 合法的包头，继续处理
-        // 现在要分配内存开始收包体，因为包体长度并不是固定的，所以内存要new出来；
-        char *pTmpBuffer = (char *)p_memory->AllocMemory(m_iLenMsgHeader + e_pkgLen, false); // 分配内存【长度是 消息头长度 + 包头长度 + 包体长度】，最后参数先给false，表示内存不需要memset
+        // 分配内存开始收包体，因为包体长度并不是固定的，所以内存要new出来；
+        char *pTmpBuffer = (char *)p_memory->AllocMemory(m_iLenMsgHeader + e_pkgLen, false); // 分配内存（长度 = 消息头长度 + 包头长度 + 包体长度），最后参数先给false，表示内存不需要memset
         pConn->precvMemPointer = pTmpBuffer;                                                 // 内存开始指针
 
-        // 先填写消息头内容
+        // 填写消息头内容
         LPSTRUC_MSG_HEADER ptmpMsgHeader = (LPSTRUC_MSG_HEADER)pTmpBuffer;
         ptmpMsgHeader->pConn = pConn;
         ptmpMsgHeader->iCurrsequence = pConn->iCurrsequence; // 收到包时的连接池中连接序号记录到消息头里来，以备将来用
-        // 再填写包头内容
+        // 填写包头内容
         pTmpBuffer += m_iLenMsgHeader;                   // 往后跳，跳过消息头，指向包头
-        memcpy(pTmpBuffer, pPkgHeader, m_iLenPkgHeader); // 直接把收到的包头拷贝进来
+        memcpy(pTmpBuffer, pPkgHeader, m_iLenPkgHeader); // 把收到的包头拷贝进来
         if (e_pkgLen == m_iLenPkgHeader)
         {
-            // 相当于收完整了，则直接入消息队列待后续业务逻辑线程去处理
+            // 收完整了，则直接入消息队列待后续业务逻辑线程去处理
             if (m_floodAkEnable == 1)
             {
                 // Flood攻击检测是否开启
@@ -228,7 +222,7 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, bool
 
 // 发送数据专用函数，返回本次发送的字节数
 // 返回 > 0，成功发送了一些字节
-//=0，估计对方断了
+//=0，对方主动断开
 //-1，errno == EAGAIN ，本方发送缓冲区满了
 //-2，errno != EAGAIN != EWOULDBLOCK != EINTR ，一般认为都是对端断开的错误
 ssize_t CSocket::sendproc(lpngx_connection_t c, char *buff, ssize_t size)
@@ -280,7 +274,7 @@ void CSocket::ngx_write_request_handler(lpngx_connection_t pConn)
     }
     else if (sendsize == -1)
     {
-        ngx_log_stderr(errno, "CSocket::ngx_write_request_handler()时if(sendsize == -1)成立，这很怪异。");
+        ngx_log_stderr(errno, "CSocket::ngx_write_request_handler()时if(sendsize == -1)成立");
     }
 
     if (sendsize > 0 && sendsize == pConn->isendlen)
