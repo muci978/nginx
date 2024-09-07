@@ -30,7 +30,7 @@ struct ngx_listening_s // 和监听端口有关的结构
 	lpngx_connection_t connection; // 连接池中的一个连接，注意这是个指针
 };
 
-//(该结构表示一个TCP连接，客户端主动发起的、Nginx服务器被动接受的TCP连接
+//该结构表示一个TCP连接，客户端主动发起的、Nginx服务器被动接受的TCP连接
 struct ngx_connection_s
 {
 	ngx_connection_s();			 
@@ -64,9 +64,9 @@ struct ngx_connection_s
 	char *psendbuf;					  // 发送数据的缓冲区的头指针，最开始指向包头+包体，发送它指向的数据
 	unsigned int isendlen;			  // 还要发送多少数据
 
-	time_t inRecyTime; // 入到资源回收站里去的时间
+	time_t inRecyTime; // 入到资源回收站的时间
 
-	time_t lastPingTime; // 上次ping的时间【上次发送心跳包的事件】
+	time_t lastPingTime; // 上次ping（接收心跳包）的时间
 
 	uint64_t FloodkickLastTime;	 // Flood攻击上次收到包的时间
 	int FloodAttackCount;		 // Flood攻击在该时间内收到包的次数统计
@@ -147,7 +147,7 @@ private:
 	LPSTRUC_MSG_HEADER RemoveFirstTimer();
 	// 从m_timeQueuemap移除最早的时间，并把最早这个时间所在的项的值所对应的指针 返回，调用者负责互斥，所以本函数不用互斥，
 	LPSTRUC_MSG_HEADER GetOverTimeTimer(time_t cur_time);
-	// 根据给的当前时间，从m_timeQueuemap找到比这个时间更老（更早）的节点【1个】返回去，这些节点都是时间超过了，要处理的节点
+	// 根据给的当前时间，从m_timeQueuemap找到比这个时间早的一个节点返回，这些节点都超时了，要处理
 	void DeleteFromTimerQueue(lpngx_connection_t pConn); // 把指定用户tcp连接从timer表中抠出去
 	void clearAllFromTimerQueue();						 // 清理时间队列中所有内容
 
@@ -165,8 +165,8 @@ protected:
 	size_t m_iLenMsgHeader; // sizeof(STRUC_MSG_HEADER);
 
 	// 时间相关
-	int m_ifTimeOutKick; // 当时间到达Sock_MaxWaitTime指定的时间时，直接把客户端踢出去，只有当Sock_WaitTimeEnable = 1时，本项才有用
-	int m_iWaitTime;	 // 多少秒检测一次是否 心跳超时，只有当Sock_WaitTimeEnable = 1时，本项才有用
+	int m_ifTimeOutKick; // 为一时当时间到达Sock_MaxWaitTime指定的时间时，立刻把客户端踢出去，不管是否有ping包，只有当Sock_WaitTimeEnable = 1时，本项才有用
+	int m_iWaitTime;	 // 多少秒检测一次是否心跳超时，只有当Sock_WaitTimeEnable = 1时，本项才有用
 
 private:
 	struct ThreadItem

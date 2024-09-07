@@ -24,6 +24,7 @@ CThreadPool::~CThreadPool()
     // 资源释放在StopAll()里统一进行
 
     // 接收消息队列中内容释放
+    // 当StopAll执行时，可能有线程正要拿取信息，而该线程关闭必须先完成本次处理，所以在确认所有线程退出后再销毁消息队列
     clearMsgRecvQueue();
 }
 

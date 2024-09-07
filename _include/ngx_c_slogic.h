@@ -10,6 +10,8 @@ public:
 	CLogicSocket();
 	virtual ~CLogicSocket();
 	virtual bool Initialize();
+	// virtual bool Initialize_subproc(); // 初始化函数[子进程中执行]
+	// virtual void Shutdown_subproc();   // 关闭退出函数[子进程中执行]
 
 public:
 	// 通用收发数据相关函数

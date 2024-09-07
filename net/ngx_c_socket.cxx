@@ -332,7 +332,7 @@ void CSocket::msgSend(char *psendbuf)
         return;
     }
 
-    // 总体数据并无风险，不会导致服务器崩溃，要看看个体数据，找一下恶意者
+    // 总体数据并无风险，不会导致服务器崩溃，再检查一下个体连接，找一下恶意者
     LPSTRUC_MSG_HEADER pMsgHeader = (LPSTRUC_MSG_HEADER)psendbuf;
     lpngx_connection_t p_Conn = pMsgHeader->pConn;
     if (p_Conn->iSendCount > 400)
@@ -585,7 +585,7 @@ int CSocket::ngx_epoll_process_events(int timer)
 
         if (revents & EPOLLIN)
         {
-
+            p_Conn->lastPingTime = time(NULL);
             (this->*(p_Conn->rhandler))(p_Conn); // 这是一个成员函数指针
         }
 
@@ -593,6 +593,7 @@ int CSocket::ngx_epoll_process_events(int timer)
         {
             if (revents & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) // 客户端关闭，如果服务器端挂着一个写通知事件，则这里个条件是可能成立的
             {
+                // 写时对端关闭什么都不做，交给读来感知并解决
                 --p_Conn->iThrowsendCount;
             }
             else
@@ -622,17 +623,19 @@ void *CSocket::ServerSendQueueThread(void *threadData)
     CMemory *p_memory = CMemory::GetInstance();
 
     while (g_stopEvent == 0) // 不退出
-    {
-        // 为了让信号量值+1，可以在其他线程调用sem_post达到，实际上在CSocekt::msgSend()调用sem_post就达到了让这里sem_wait走下去的目的
+    {   
+        // 信号量指示该函数是否向下执行，有如下情况
+        // 有新的消息要发送 CSocekt::msgSend()
+        // 整个程序退出，要退出循环
+        // 同一个连接的两个消息，起初各个消息都由epoll负责，若第一个消息发送成功，说明有空间了，第二个消息转回本函数发送
+        // 当发送缓冲满了之后再执行，转用epoll，若epoll驱动发送新的消息成功，则缓冲可能有空了，转回该函数发送
         // 如果被某个信号中断，sem_wait也可能过早的返回，错误为EINTR；
-        // 整个程序退出之前，也要sem_post()一下，确保如果本线程卡在sem_wait()，也能走下去从而让本线程成功返回
         if (sem_wait(&pSocketObj->m_semEventSendQueue) == -1)
         {
             if (errno != EINTR)
                 ngx_log_stderr(errno, "CSocket::ServerSendQueueThread()中sem_wait(&pSocketObj->m_semEventSendQueue)失败.");
         }
 
-        // 需要处理数据收发
         if (g_stopEvent != 0) // 要求整个进程退出
             break;
 
@@ -655,26 +658,27 @@ void *CSocket::ServerSendQueueThread(void *threadData)
                 if (p_Conn->iCurrsequence != pMsgHeader->iCurrsequence)
                 {
                     // 本包中保存的序列号与p_Conn中实际的序列号已经不同，丢弃此消息
-                    pos++;
+                    ++pos;
                     pSocketObj->m_MsgSendQueue.erase(pos2);
                     --pSocketObj->m_iSendMsgQueueCount;
                     p_memory->FreeMemory(pMsgBuf);
                     continue;
                 }
 
+                // 同一个连接连续发送两个消息，第一个消息已经判断需要由epoll发送了，此时缓冲满，那么第二个也由epoll发送
                 if (p_Conn->iThrowsendCount > 0)
                 {
                     // 靠系统驱动来发送消息，所以这里不能再发送
-                    pos++;
+                    ++pos;
                     continue;
                 }
 
                 --p_Conn->iSendCount;
 
-                // 走到这里，可以发送消息，一些必须的信息记录，要发送的东西也要从发送队列里干掉
+                // 走到这里，可以发送消息，一些必须的信息记录，要发送的东西也要从发送队列里删除
                 p_Conn->psendMemPointer = pMsgBuf; // 发送后释放用的，因为这段内存是new出来的
                 pos2 = pos;
-                pos++;
+                ++pos;
                 pSocketObj->m_MsgSendQueue.erase(pos2);
                 --pSocketObj->m_iSendMsgQueueCount;
                 p_Conn->psendbuf = (char *)pPkgHeader; // 要发送的数据的缓冲区指针，因为发送数据不一定全部都能发送出去，要记录数据发送到了哪里，需要知道下次数据从哪里开始发送
@@ -712,10 +716,9 @@ void *CSocket::ServerSendQueueThread(void *threadData)
                     continue;
                 }
 
-                // 能走到这里应该有问题
+                // 对端断开
                 else if (sendsize == 0)
                 {
-
                     p_memory->FreeMemory(p_Conn->psendMemPointer); // 释放内存
                     p_Conn->psendMemPointer = NULL;
                     continue;

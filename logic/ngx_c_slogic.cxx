@@ -33,10 +33,10 @@ static const handler statusHandler[] =
     {
         // 数组前5个元素，保留，以备将来增加一些基本服务器功能
         &CLogicSocket::_HandlePing, // 【0】：心跳包的实现
-        NULL,                       // 【1】：下标从0开始
-        NULL,                       // 【2】：下标从0开始
-        NULL,                       // 【3】：下标从0开始
-        NULL,                       // 【4】：下标从0开始
+        NULL,
+        NULL,
+        NULL,
+        NULL,
 
         // 开始处理具体的业务逻辑
         &CLogicSocket::_HandleRegister, // 【5】：实现具体的注册功能
@@ -64,18 +64,18 @@ bool CLogicSocket::Initialize()
     return bParentInit;
 }
 
-// 处理收到的数据包，由线程池来调用本函数，本函数是一个单独的线程；
+// 处理收到的数据包，由线程池来调用本函数
 void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
 {
     LPSTRUC_MSG_HEADER pMsgHeader = (LPSTRUC_MSG_HEADER)pMsgBuf;                   // 消息头
     LPCOMM_PKG_HEADER pPkgHeader = (LPCOMM_PKG_HEADER)(pMsgBuf + m_iLenMsgHeader); // 包头
-    void *pPkgBody;                                                                // 指向包体的指针
+    void *pPkgBody = NULL;                                                                // 指向包体的指针
     unsigned short pkglen = ntohs(pPkgHeader->pkgLen);                             // 客户端指明的包宽度【包头+包体】
 
     if (m_iLenPkgHeader == pkglen)
     {
         // 没有包体，只有包头
-        if (pPkgHeader->crc32 != 0) // 只有包头的crc值给0
+        if (pPkgHeader->crc32 != 0) // 只有包头的crc值为0
         {
             return; // crc错，直接丢弃
         }
@@ -98,9 +98,10 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
     unsigned short imsgCode = ntohs(pPkgHeader->msgCode); // 消息代码拿出来
     lpngx_connection_t p_Conn = pMsgHeader->pConn;        // 消息头中藏着连接池中连接的指针
 
+    // 连接的序号发生了改变，说明连接发生了变动，原连接已经断开了
     if (p_Conn->iCurrsequence != pMsgHeader->iCurrsequence)
     {
-        return; // 丢弃包，客户端断开了
+        return; // 丢弃包
     }
 
     if (imsgCode >= AUTH_TOTAL_COMMANDS) // 无符号数不可能<0
@@ -109,7 +110,7 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
         return;                                                                                    // 丢弃包，恶意包或者错误包
     }
 
-    if (statusHandler[imsgCode] == NULL) // 这种用imsgCode的方式可以使查找要执行的成员函数效率特别高
+    if (statusHandler[imsgCode] == NULL)
     {
         ngx_log_stderr(0, "CLogicSocket::threadRecvProcFunc()中imsgCode=%d消息码找不到对应的处理函数!", imsgCode);
         return;
@@ -166,10 +167,9 @@ void CLogicSocket::SendNoBodyPkgToClient(LPSTRUC_MSG_HEADER pMsgHeader, unsigned
     return;
 }
 
-// 处理各种业务逻辑
+// 处理各种业务逻辑，以下为一些通用操作，不属于脚手架内容
 bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn, LPSTRUC_MSG_HEADER pMsgHeader, char *pPkgBody, unsigned short iBodyLength)
 {
-
     // 判断包体的合法性
     if (pPkgBody == NULL) // 具体看客户端服务器约定，如果约定这个命令[msgCode]必须带包体，那么如果不带包体，就认为是恶意包，不处理
     {
@@ -182,14 +182,14 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn, LPSTRUC_MSG_HEADER 
         return false;
     }
 
-    CLock lock(&pConn->logicPorcMutex); // 凡是和本用户有关的访问都互斥
+    // 凡是和本用户有关的访问都互斥，因为如果同一个客户端发送多个请求，可能会出现几个线程同时处理的情况
+    CLock lock(&pConn->logicPorcMutex); 
 
     // 取得了整个发送过来的数据
     LPSTRUCT_REGISTER p_RecvInfo = (LPSTRUCT_REGISTER)pPkgBody;
-    p_RecvInfo->iType = ntohl(p_RecvInfo->iType);               // 所有数值型,short,int,long,uint64_t,int64_t不要忘记传输和接收转化字节序
-    p_RecvInfo->username[sizeof(p_RecvInfo->username) - 1] = 0; // 防止客户端发送过来畸形包，导致服务器直接使用这个数据出现错误。
-    p_RecvInfo->password[sizeof(p_RecvInfo->password) - 1] = 0; // 防止客户端发送过来畸形包，导致服务器直接使用这个数据出现错误。
-
+    p_RecvInfo->iType = ntohl(p_RecvInfo->iType);               // 所有数值型,short,int,long,uint64_t,int64_t传输和接收都要转化字节序
+    p_RecvInfo->username[sizeof(p_RecvInfo->username) - 1] = 0; // 防止客户端发送过来畸形包，导致服务器直接使用这个数据出现错误
+    p_RecvInfo->password[sizeof(p_RecvInfo->password) - 1] = 0; // 防止客户端发送过来畸形包，导致服务器直接使用这个数据出现错误
 
     // 给客户端返回数据时，一般也是返回一个结构，这个结构内容具体由客户端/服务器协商，这里就给客户端也返回同样的 STRUCT_REGISTER
     LPCOMM_PKG_HEADER pPkgHeader;
@@ -205,7 +205,7 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn, LPSTRUC_MSG_HEADER 
     pPkgHeader->msgCode = _CMD_REGISTER;                           // 消息代码，可以统一在ngx_logiccomm.h中定义
     pPkgHeader->msgCode = htons(pPkgHeader->msgCode);              // htons主机序转网络序
     pPkgHeader->pkgLen = htons(m_iLenPkgHeader + iSendLen);        // 整个包的尺寸，包头+包体尺寸
-    // d)填充包体
+    // 填充包体
     LPSTRUCT_REGISTER p_sendInfo = (LPSTRUCT_REGISTER)(p_sendbuf + m_iLenMsgHeader + m_iLenPkgHeader); // 跳过消息头，跳过包头，就是包体了
 
     // 包体内容全部确定好后，计算包体的crc32值
@@ -252,6 +252,7 @@ bool CLogicSocket::_HandleLogIn(lpngx_connection_t pConn, LPSTRUC_MSG_HEADER pMs
     return true;
 }
 
+// 接收并处理发过来的ping包
 bool CLogicSocket::_HandlePing(lpngx_connection_t pConn, LPSTRUC_MSG_HEADER pMsgHeader, char *pPkgBody, unsigned short iBodyLength)
 {
     if (iBodyLength != 0) // 有包体则认为是非法包

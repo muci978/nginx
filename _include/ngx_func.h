@@ -1,5 +1,4 @@
 ﻿// 函数声明放在这个头文件里
-
 #ifndef __NGX_FUNC_H__
 #define __NGX_FUNC_H__
 

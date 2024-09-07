@@ -19,11 +19,12 @@
 #include "ngx_c_memory.h"
 #include "ngx_c_lockmutex.h"
 
-// 设置踢出时钟(向multimap表中增加内容)，用户三次握手成功连入，然后开启了踢人开关【Sock_WaitTimeEnable = 1】，那么本函数被调用
+// 设置踢出时钟(向multimap表中增加内容)，用户三次握手成功连入，并且踢人开关Sock_WaitTimeEnable = 1，那么本函数被调用
 void CSocket::AddToTimerQueue(lpngx_connection_t pConn)
 {
 	CMemory *p_memory = CMemory::GetInstance();
 
+	// 超时时间
 	time_t futtime = time(NULL);
 	futtime += m_iWaitTime; // 20秒之后的时间
 
@@ -37,7 +38,7 @@ void CSocket::AddToTimerQueue(lpngx_connection_t pConn)
 	return;
 }
 
-// 从multimap中取得最早的时间返回去，调用者负责互斥，所以本函数不用互斥，调用者确保m_timeQueuemap中一定不为空
+// 从multimap中取得最早的时间返回，调用者负责互斥，所以本函数不用互斥，调用者确保m_timeQueuemap中一定不为空
 time_t CSocket::GetEarliestTime()
 {
 	std::multimap<time_t, LPSTRUC_MSG_HEADER>::iterator pos;
@@ -45,7 +46,7 @@ time_t CSocket::GetEarliestTime()
 	return pos->first;
 }
 
-// 从m_timeQueuemap移除最早的时间，并把最早这个时间所在的项的值所对应的指针 返回，调用者负责互斥，所以本函数不用互斥，
+// 从m_timeQueuemap移除最早的时间，并把最早这个时间所在的项的值所对应的指针返回，调用者负责互斥，所以本函数不用互斥
 LPSTRUC_MSG_HEADER CSocket::RemoveFirstTimer()
 {
 	std::multimap<time_t, LPSTRUC_MSG_HEADER>::iterator pos;
@@ -61,7 +62,7 @@ LPSTRUC_MSG_HEADER CSocket::RemoveFirstTimer()
 	return p_tmp;
 }
 
-// 根据给的当前时间，从m_timeQueuemap找到比这个时间更老（更早）的节点【1个】返回去，这些节点都是时间超过了，要处理的节点
+// 根据给的当前时间，从m_timeQueuemap找到比这个时间更早的一个节点返回去，这些节点都是时间超过了，要处理的节点
 // 调用者负责互斥，所以本函数不用互斥
 LPSTRUC_MSG_HEADER CSocket::GetOverTimeTimer(time_t cur_time)
 {
@@ -71,25 +72,27 @@ LPSTRUC_MSG_HEADER CSocket::GetOverTimeTimer(time_t cur_time)
 	if (m_cur_size_ == 0 || m_timerQueuemap.empty())
 		return NULL;
 
-	time_t earliesttime = GetEarliestTime(); // 到multimap中去查询
+	time_t earliesttime = GetEarliestTime();
 	if (earliesttime <= cur_time)
 	{
 		// 超时的节点
-		ptmp = RemoveFirstTimer(); // 把这个超时的节点从 m_timerQueuemap 删掉，并把这个节点的第二项返回来；
+		ptmp = RemoveFirstTimer(); // 把这个超时的节点从 m_timerQueuemap 删掉，并把这个节点的消息头返回
 
+		// 如果不是要求超时就立马踢出才做这里的事
+		// 因为下次超时的时间也依然要判断，所以还要把这个节点加回来
 		if (m_ifTimeOutKick != 1)
 		{
-			// 如果不是要求超时就提出，则才做这里的事：
-			// 因为下次超时的时间也依然要判断，所以还要把这个节点加回来
+			// 在一个等待时间后再次检查
+			// 若上一次ping的时间到当前时间差值大于最大等待时间时会将连接踢出，在关闭线程时从队列删除
 			time_t newinqueutime = cur_time + (m_iWaitTime);
 			LPSTRUC_MSG_HEADER tmpMsgHeader = (LPSTRUC_MSG_HEADER)p_memory->AllocMemory(sizeof(STRUC_MSG_HEADER), false);
 			tmpMsgHeader->pConn = ptmp->pConn;
 			tmpMsgHeader->iCurrsequence = ptmp->iCurrsequence;
-			m_timerQueuemap.insert(std::make_pair(newinqueutime, tmpMsgHeader)); // 自动排序 小->大
+			m_timerQueuemap.insert(std::make_pair(newinqueutime, tmpMsgHeader));
 			m_cur_size_++;
 		}
 
-		if (m_cur_size_ > 0) // 这个判断条件必要，因为以后可能在这里扩充别的代码
+		if (m_cur_size_ > 0)
 		{
 			m_timer_value_ = GetEarliestTime(); // 计时队列头部时间值保存到m_timer_value_里
 		}
@@ -106,7 +109,8 @@ void CSocket::DeleteFromTimerQueue(lpngx_connection_t pConn)
 
 	CLock lock(&m_timequeueMutex);
 
-	// 因为实际情况可能比较复杂，将来可能还扩充代码等等，所以如下我们遍历整个队列找一圈，而不是找到一次，以免出现什么遗漏
+	// 如果使用立即踢出，则在已经删除了，否则在此删除
+	// 因为实际情况可能比较复杂，将来可能还扩充代码等等，所以遍历整个队列找一圈，而不是找到一次，以免出现遗漏
 lblMTQM:
 	pos = m_timerQueuemap.begin();
 	posend = m_timerQueuemap.end();
@@ -153,9 +157,10 @@ void *CSocket::ServerTimerQueueMonitorThread(void *threadData)
 	int err;
 
 	while (g_stopEvent == 0) // 不退出
-	{
-		// 这里没互斥判断，所以只是个初级判断，目的至少是队列为空时避免系统损耗
-		if (pSocketObj->m_cur_size_ > 0) // 队列不为空，有内容
+	{	
+		// 只有加入的时候和拿取的时候会访问，若为0不会操作，可以省去一个互斥
+		// 没互斥判断，只是个初级判断，目的是减少队列为空时避免系统损耗
+		if (pSocketObj->m_cur_size_ > 0) // 队列一定有数据
 		{
 			// 时间队列中最近发生事情的时间放到 absolute_time里；
 			absolute_time = pSocketObj->m_timer_value_; // 这个省了个互斥
@@ -186,13 +191,13 @@ void *CSocket::ServerTimerQueueMonitorThread(void *threadData)
 			}
 		}
 
-		usleep(500 * 1000); // 为简化问题，直接每次休息500毫秒
+		usleep(500 * 1000); // 为简化问题，每次休息500毫秒
 	}
 
 	return (void *)0;
 }
 
-// 心跳包检测时间到，该去检测心跳包是否超时的事宜，本函数只是把内存释放，子类应该重新事先该函数以实现具体的判断动作
+// 心跳包检测时间到，该去检测心跳包是否超时的事宜，本函数只是把内存释放，子类应该重新实现该函数以实现具体的判断动作
 void CSocket::procPingTimeOutChecking(LPSTRUC_MSG_HEADER tmpmsg, time_t cur_time)
 {
 	CMemory *p_memory = CMemory::GetInstance();

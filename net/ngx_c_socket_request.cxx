@@ -275,6 +275,7 @@ void CSocket::ngx_write_request_handler(lpngx_connection_t pConn)
     else if (sendsize == -1)
     {
         ngx_log_stderr(errno, "CSocket::ngx_write_request_handler()时if(sendsize == -1)成立");
+        return;
     }
 
     if (sendsize > 0 && sendsize == pConn->isendlen)
