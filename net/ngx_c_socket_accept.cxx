@@ -28,6 +28,8 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
     static int use_accept4 = 1; // 先认为能够使用accept4()函数
     lpngx_connection_t newc;    // 代表连接池中的一个连接，注意这是指针
 
+    ngx_log_error_core(NGX_LOG_NOTICE, 0, "【master进程】开始accept一个客户端连接.....");
+
     socklen = sizeof(mysockaddr);
     do
     {

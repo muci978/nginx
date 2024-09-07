@@ -94,11 +94,7 @@ int main(int argc, char *const *argv)
 		exitcode = 1;
 		goto lblexit;
 	}
-	if (g_socket.Initialize() == false) // 初始化socket
-	{
-		exitcode = 1;
-		goto lblexit;
-	}
+	g_socket.Initialize(); // 初始化socket
 
 	ngx_init_setproctitle(); // 把环境变量搬家
 

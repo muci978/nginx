@@ -86,7 +86,7 @@ class CSocket
 public:
 	CSocket();						   
 	virtual ~CSocket();				  
-	virtual bool Initialize();		   // 初始化函数[父进程中执行]
+	virtual void Initialize();		   // 初始化函数[父进程中执行]
 	virtual bool Initialize_subproc(); // 初始化函数[子进程中执行]
 	virtual void Shutdown_subproc();   // 关闭退出函数[子进程中执行]
 
@@ -98,6 +98,9 @@ public:
 	// 心跳包检测时间到，该去检测心跳包是否超时的事宜，本函数只是把内存释放，子类应该重新事先该函数以实现具体的判断动作
 
 public:
+	bool ngx_open_listening_sockets();	// 监听必须的端口（支持多个端口）
+	void ngx_close_listening_sockets(); // 关闭监听套接字
+
 	int ngx_epoll_init(); // epoll功能初始化
 	int ngx_epoll_process_events(int timer); // epoll等待接收和处理事件
 	// epoll操作事件
@@ -110,8 +113,6 @@ protected:
 
 private:
 	void ReadConf();					// 专门用于读各种配置项
-	bool ngx_open_listening_sockets();	// 监听必须的端口（支持多个端口）
-	void ngx_close_listening_sockets(); // 关闭监听套接字
 	bool setnonblocking(int sockfd);	// 设置非阻塞套接字
 
 	// 一些业务处理函数handler

@@ -48,12 +48,10 @@ CSocket::CSocket()
 
 // 初始化函数
 // 成功返回true，失败返回false
-bool CSocket::Initialize()
+void CSocket::Initialize()
 {
     ReadConf();                                // 读配置项
-    if (ngx_open_listening_sockets() == false) // 打开监听端口
-        return false;
-    return true;
+    return;
 }
 
 // 子进程中才需要执行的初始化函数
@@ -211,7 +209,6 @@ void CSocket::ReadConf()
 }
 
 // 监听端口，支持多个端口
-// 在创建worker进程之前就要执行这个函数；
 bool CSocket::ngx_open_listening_sockets()
 {
     int isock; // socket
@@ -249,8 +246,8 @@ bool CSocket::ngx_open_listening_sockets()
         int reuseport = 1;
         if (setsockopt(isock, SOL_SOCKET, SO_REUSEPORT, (const void *)&reuseport, sizeof(int)) == -1) // 端口复用需要内核支持
         {
-            // 失败就失败，失败顶多是惊群，但程序依旧可以正常运行，所以仅仅提示一下即可
             ngx_log_stderr(errno, "CSocket::Initialize()中setsockopt(SO_REUSEPORT)失败", i);
+            return false;
         }
 
         // 设置socket为非阻塞
@@ -285,11 +282,12 @@ bool CSocket::ngx_open_listening_sockets()
         memset(p_listensocketitem, 0, sizeof(ngx_listening_t));
         p_listensocketitem->port = iport;
         p_listensocketitem->fd = isock;
-        ngx_log_error_core(NGX_LOG_INFO, 0, "监听%d端口成功!", iport);
+        ngx_log_error_core(NGX_LOG_INFO, 0, "【master进程】监听%d端口成功!", iport);
         m_ListenSocketList.push_back(p_listensocketitem);
     }
     if (m_ListenSocketList.size() <= 0) // 不可能一个端口都不监听
         return false;
+
     return true;
 }
 

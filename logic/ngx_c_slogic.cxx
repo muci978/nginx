@@ -56,12 +56,12 @@ CLogicSocket::~CLogicSocket()
 
 // 初始化函数【fork()子进程之前干这个事】
 // 成功返回true，失败返回false
-bool CLogicSocket::Initialize()
+void CLogicSocket::Initialize()
 {
     // 本类相关的初始化工作
     // 根据需要扩展
-    bool bParentInit = CSocket::Initialize();
-    return bParentInit;
+    CSocket::Initialize();
+    return;
 }
 
 // 处理收到的数据包，由线程池来调用本函数

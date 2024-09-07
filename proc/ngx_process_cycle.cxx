@@ -9,6 +9,7 @@
 #include "ngx_func.h"
 #include "ngx_macro.h"
 #include "ngx_c_conf.h"
+#include "ngx_c_slogic.h"
 
 static void ngx_start_worker_processes(int threadnums);
 static int ngx_spawn_process(int threadnums, const char *pprocname);
@@ -126,7 +127,7 @@ static int ngx_spawn_process(int inum, const char *pprocname)
     case 0:
         ngx_parent = ngx_pid;
         ngx_pid = getpid();
-        sleep(1);
+        usleep(100);
         ngx_worker_process_cycle(inum, pprocname); // 所有worker子进程在这个函数里不断循环
         break;
 
@@ -167,7 +168,7 @@ static void ngx_worker_process_init(int inum)
     sigset_t set; // 信号集
 
     sigemptyset(&set);                              // 清空信号集
-    if (sigprocmask(SIG_SETMASK, &set, NULL) == -1) // 原来是屏蔽那10个信号】，现在不再屏蔽任何信号
+    if (sigprocmask(SIG_SETMASK, &set, NULL) == -1) // 原来是屏蔽那10个信号，现在不再屏蔽任何信号
     {
         ngx_log_error_core(NGX_LOG_ALERT, errno, "ngx_worker_process_init()中sigprocmask()失败!");
     }
@@ -186,6 +187,10 @@ static void ngx_worker_process_init(int inum)
         exit(-2);
     }
 
+    if (g_socket.ngx_open_listening_sockets() == false) // 打开监听端口
+    {
+        exit(-2);
+    }
     g_socket.ngx_epoll_init(); // 初始化epoll相关内容，同时往监听socket上增加监听事件，从而开始让监听端口履行其职责
     return;
 }
