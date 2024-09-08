@@ -131,6 +131,8 @@ CSocket::~CSocket()
     std::vector<lpngx_listening_t>::iterator pos;
     for (pos = m_ListenSocketList.begin(); pos != m_ListenSocketList.end(); ++pos) // vector
     {
+        ngx_log_error_core(NGX_LOG_INFO, 0, "【worker进程】监听端口%d关闭!", (*pos)->port);
+        close((*pos)->fd);
         delete (*pos);
     }
     m_ListenSocketList.clear();
