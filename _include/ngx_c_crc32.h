@@ -7,38 +7,16 @@ class CCRC32
 {
 private:
 	CCRC32();
-
-public:
 	~CCRC32();
-
-private:
-	static CCRC32 *m_instance;
+	CCRC32(const CCRC32&);
+	CCRC32& operator=(const CCRC32&);
 
 public:
 	static CCRC32 *GetInstance()
 	{
-		if (m_instance == NULL)
-		{
-			if (m_instance == NULL)
-			{
-				m_instance = new CCRC32();
-				static CGarhuishou cl;
-			}
-		}
-		return m_instance;
+		static CCRC32 c;
+		return &c;
 	}
-	class CGarhuishou
-	{
-	public:
-		~CGarhuishou()
-		{
-			if (CCRC32::m_instance)
-			{
-				delete CCRC32::m_instance;
-				CCRC32::m_instance = NULL;
-			}
-		}
-	};
 
 public:
 	void Init_CRC32_Table();

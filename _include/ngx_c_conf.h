@@ -9,38 +9,16 @@ class CConfig
 {
 private:
 	CConfig();
-
-public:
+	CConfig(const CConfig &);
+	CConfig &operator=(const CConfig &);
 	~CConfig();
-
-private:
-	static CConfig *m_instance;
 
 public:
 	static CConfig *GetInstance()
 	{
-		if (m_instance == NULL)
-		{
-			if (m_instance == NULL)
-			{
-				m_instance = new CConfig();
-				static CGarhuishou cl;
-			}
-		}
-		return m_instance;
+		static CConfig c;
+		return &c;
 	}
-	class CGarhuishou
-	{
-	public:
-		~CGarhuishou()
-		{
-			if (CConfig::m_instance)
-			{
-				delete CConfig::m_instance;
-				CConfig::m_instance = NULL;
-			}
-		}
-	};
 
 public:
 	bool Load(const char *pconfName);

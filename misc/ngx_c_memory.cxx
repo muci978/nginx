@@ -4,8 +4,6 @@
 
 #include "ngx_c_memory.h"
 
-CMemory *CMemory::m_instance = NULL;
-
 // 分配内存
 // memCount：分配的字节大小
 // ifmemset：是否要把分配的内存初始化为0；

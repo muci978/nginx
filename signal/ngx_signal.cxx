@@ -96,7 +96,7 @@ static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 		switch (signo)
 		{
 		case SIGCHLD:
-			ngx_reap = 1; // 标记子进程状态变化，master主进程的for(;;)循环中可能会用到这个变量【比如重新产生一个子进程】
+			ngx_reap = 1; // 标记子进程状态变化，master主进程的for(;;)循环中会用到这个变量，比如重新产生一个子进程
 			break;
 
 		case SIGTERM:
@@ -195,6 +195,10 @@ static void ngx_process_get_status(void)
 
 static void ngx_shutdown(void)
 {
+	if (g_stopEvent == 1)
+	{
+		return;
+	}
 	g_stopEvent = 1;
 	ngx_log_error_core(NGX_LOG_NOTICE, 0, "【master进程】准备退出，向所有子进程发送SIGTERM.....!");
 	kill(0, SIGTERM);

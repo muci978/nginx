@@ -7,38 +7,16 @@ class CMemory
 {
 private:
 	CMemory() {}
-
-public:
-	~CMemory() {};
-
-private:
-	static CMemory *m_instance;
+	~CMemory() {}
+	CMemory(const CMemory&);
+	CMemory& operator=(const CMemory&);
 
 public:
 	static CMemory *GetInstance()
 	{
-		if (m_instance == NULL)
-		{
-			if (m_instance == NULL)
-			{
-				m_instance = new CMemory();
-				static CGarhuishou cl;
-			}
-		}
-		return m_instance;
+		static CMemory c;
+		return &c;
 	}
-	class CGarhuishou
-	{
-	public:
-		~CGarhuishou()
-		{
-			if (CMemory::m_instance)
-			{
-				delete CMemory::m_instance;
-				CMemory::m_instance = NULL;
-			}
-		}
-	};
 
 public:
 	void *AllocMemory(int memCount, bool ifmemset);
